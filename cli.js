@@ -1,124 +1,94 @@
 #!/usr/bin/env node
-
 const { Command } = require('commander');
-const RawDatabase = require('./db');
-
+const RawDatabase = require('./index');
 const program = new Command();
 
-program
-  .version('1.0.0')
-  .description('CLI to interact with the raw file database');
+const FILE_EXT = '.jsonl';
+
+program.version('2.0.0').description('CLI para banco de dados JSONL');
 
 program
-  .command('add <file> <newRow>')
-  .description('Adds a new row to the database')
-  .action(async (file, newRow) => {
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const result = await database.createRow(newRow);
-    if (result) {
-      console.log('Row added successfully!');
-    } else {
-      console.log('Failed to add the row.');
-    }
+  .command('add <file> <data>')
+  .description('Adiciona uma nova linha (aceita string ou JSON)')
+  .action(async (file, data) => {
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const ok = await db.createRow(data);
+    console.log(ok ? '✅ Linha adicionada!' : '❌ Falha ao adicionar linha.');
   });
 
 program
   .command('get <file> <page>')
-  .description('Retrieves rows from the file with pagination')
-  .option('-q, --quantity <quantity>', 'Number of rows per page', 10)
-  .option('-a, --asc', 'Order in ascending order', false)
-  .action(async (file, page = 1, options) => {
-    const { quantity, asc } = options;
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const result = await database.getPaginatedRows({
-      quantity: parseInt(quantity),
-      asc: asc === 'true',
+  .description('Lista registros com paginação')
+  .option('-q, --quantity <quantity>', 'Quantidade por página', 10)
+  .option('-a, --asc', 'Ordem ascendente', false)
+  .option('-p, --pretty', 'Exibir JSON formatado', false)
+  .action(async (file, page, opts) => {
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const { rows, total } = await db.getPaginatedRows({
+      quantity: parseInt(opts.quantity),
+      asc: !!opts.asc,
       page: parseInt(page),
     });
-
-    console.log(`Total rows: ${result.total}`);
-    result.rows.forEach((row, index) => {
-      console.log(`${index + 1}. ${row}`);
+    console.log(`📄 Total de linhas: ${total}`);
+    rows.forEach((r, i) => {
+      console.log(opts.pretty ? JSON.stringify(r, null, 2) : `${i + 1}. ${JSON.stringify(r)}`);
     });
   });
 
 program
   .command('getIndex <file> <index>')
-  .description('Retrieves a row by its index')
-  .action(async (file, index) => {
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const row = await database.getIndexRow(parseInt(index));
-    if (row) {
-      console.log(`Row ${index}: ${row}`);
-    } else {
-      console.log(`No row found at index ${index}`);
-    }
+  .description('Obtém um registro pelo índice')
+  .option('-p, --pretty', 'Exibir JSON formatado', false)
+  .action(async (file, index, opts) => {
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const row = await db.getIndexRow(parseInt(index));
+    if (!row) return console.log('Nenhum registro encontrado.');
+    console.log(opts.pretty ? JSON.stringify(row, null, 2) : JSON.stringify(row));
   });
 
 program
   .command('exists <file> <term>')
-  .description('Checks if a row containing the specified term exists')
+  .description('Verifica se existe linha contendo o termo')
   .action(async (file, term) => {
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const row = await database.getRowByTerm(term); // Método que você precisa adicionar na classe RawDatabase
-    if (row) {
-      console.log(`Row found: ${row}`);
-    } else {
-      console.log(`No row found containing the term "${term}".`);
-    }
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const row = await db.getRowByTerm(term);
+    console.log(row ? `✅ Encontrado: ${JSON.stringify(row)}` : `❌ Nenhum registro com "${term}"`);
   });
-
 
 program
   .command('deleteByTerm <file> <term>')
-  .description('Deletes rows that contain the specified term')
+  .description('Remove linhas que contenham o termo')
   .action(async (file, term) => {
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const success = await database.deleteByTerm(term);
-    if (success) {
-      console.log('Rows deleted successfully.');
-    } else {
-      console.log('No rows found to delete with the given term.');
-    }
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const ok = await db.deleteByTerm(term);
+    console.log(ok ? '🗑️ Linhas removidas.' : 'Nenhuma linha correspondente encontrada.');
   });
 
 program
   .command('deleteByIndex <file> <index>')
-  .description('Deletes a row by its index')
+  .description('Remove linha pelo índice')
   .action(async (file, index) => {
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const success = await database.deleteByIndex(parseInt(index));
-    if (success) {
-      console.log(`Row ${index} deleted successfully.`);
-    } else {
-      console.log(`Could not delete row ${index}.`);
-    }
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const ok = await db.deleteByIndex(parseInt(index));
+    console.log(ok ? '🗑️ Linha removida.' : 'Índice inválido.');
   });
 
 program
   .command('upgradeByIndex <file> <index> <newData>')
-  .description('Updates a row by its index')
+  .description('Atualiza linha pelo índice (aceita JSON)')
   .action(async (file, index, newData) => {
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const success = await database.upgradeByIndex(parseInt(index), newData);
-    if (success) {
-      console.log(`Row ${index} updated successfully.`);
-    } else {
-      console.log(`Could not update row ${index}.`);
-    }
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const ok = await db.upgradeByIndex(parseInt(index), newData);
+    console.log(ok ? '✅ Linha atualizada!' : '❌ Falha ao atualizar.');
   });
 
 program
   .command('upgradeByTerm <file> <term> <newData>')
-  .description('Updates a row based on the term')
+  .description('Atualiza linha que contenha termo (aceita JSON)')
   .action(async (file, term, newData) => {
-    const database = new RawDatabase(file, { baseDir: './data', fileExtension: '.dat' });
-    const success = await database.upgradeByTerm(term, newData);
-    if (success) {
-      console.log('Row updated successfully.');
-    } else {
-      console.log('No row found to update with the given term.');
-    }
+    const db = new RawDatabase(file, { baseDir: './data', fileExtension: FILE_EXT });
+    const ok = await db.upgradeByTerm(term, newData);
+    console.log(ok ? '✅ Linha atualizada!' : '❌ Nenhuma linha encontrada.');
   });
 
 program.parse(process.argv);
