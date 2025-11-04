@@ -1,6 +1,4 @@
-// index.js — versão JSONL avançada
 const fs = require('fs');
-const readline = require('readline');
 const path = require('path');
 
 class RawDatabase {
@@ -35,37 +33,60 @@ class RawDatabase {
       .map(line => JSON.parse(line));
   }
 
-  // ✅ adiciona uma nova linha (gera id automaticamente)
   async createRow(newRow) {
     const { dirPath, filePath } = await this.splitPath();
     await this.ensureFile(filePath, dirPath);
-
     const rows = await this.getAllRows(filePath);
     const nextId = rows.length > 0 ? rows[rows.length - 1].id + 1 : 1;
-
     let obj;
     try {
-      // tenta interpretar JSON se a entrada for string JSON
       obj = typeof newRow === 'string' && newRow.trim().startsWith('{')
         ? JSON.parse(newRow)
         : { data: newRow };
     } catch {
       obj = { data: newRow };
     }
-
     obj.id = nextId;
     const jsonLine = JSON.stringify(obj);
     await fs.promises.appendFile(filePath, jsonLine + '\n');
-    return true;
+    return obj;
   }
 
-  // ✅ lê registros com paginação
   async getPaginatedRows({ quantity = 10, asc = true, page = 1 }) {
     const { filePath } = await this.splitPath();
     const rows = await this.getAllRows(filePath);
     const sorted = asc ? rows : rows.reverse();
     const start = (page - 1) * quantity;
     return { rows: sorted.slice(start, start + quantity), total: rows.length };
+  }
+
+  async getById(id) {
+    const { filePath } = await this.splitPath();
+    const rows = await this.getAllRows(filePath);
+    return rows.find(r => r.id === Number(id)) || null;
+  }
+
+  async deleteById(id) {
+    const { filePath } = await this.splitPath();
+    const rows = await this.getAllRows(filePath);
+    const filtered = rows.filter(r => r.id !== Number(id));
+    const changed = filtered.length !== rows.length;
+    if (changed) await fs.promises.writeFile(filePath, filtered.map(r => JSON.stringify(r)).join('\n') + '\n');
+    return changed;
+  }
+
+  async upgradeById(id, newData) {
+    const { filePath } = await this.splitPath();
+    const rows = await this.getAllRows(filePath);
+    const idx = rows.findIndex(r => r.id === Number(id));
+    if (idx === -1) return false;
+    const obj = typeof newData === 'string' && newData.trim().startsWith('{')
+      ? JSON.parse(newData)
+      : { data: newData };
+    obj.id = Number(id);
+    rows[idx] = obj;
+    await fs.promises.writeFile(filePath, rows.map(r => JSON.stringify(r)).join('\n') + '\n');
+    return true;
   }
 
   async getIndexRow(index) {
@@ -102,12 +123,10 @@ class RawDatabase {
     const { filePath } = await this.splitPath();
     const rows = await this.getAllRows(filePath);
     if (index < 1 || index > rows.length) return false;
-
     const obj = typeof newData === 'string' && newData.trim().startsWith('{')
       ? JSON.parse(newData)
       : { data: newData };
-
-    obj.id = rows[index - 1].id; // mantém id
+    obj.id = rows[index - 1].id;
     rows[index - 1] = obj;
     await fs.promises.writeFile(filePath, rows.map(r => JSON.stringify(r)).join('\n') + '\n');
     return true;
@@ -118,11 +137,9 @@ class RawDatabase {
     const rows = await this.getAllRows(filePath);
     const idx = rows.findIndex(r => JSON.stringify(r).toLowerCase().includes(term.toLowerCase()));
     if (idx === -1) return false;
-
     const obj = typeof newData === 'string' && newData.trim().startsWith('{')
       ? JSON.parse(newData)
       : { data: newData };
-
     obj.id = rows[idx].id;
     rows[idx] = obj;
     await fs.promises.writeFile(filePath, rows.map(r => JSON.stringify(r)).join('\n') + '\n');
