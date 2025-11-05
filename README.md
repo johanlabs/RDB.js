@@ -1,6 +1,6 @@
-# RDB.js
+# Mnemic
 
-`RDB.js` is a simple JavaScript library for managing file-based databases using JSON Lines (`.jsonl`). It allows you to add, retrieve, update, and delete rows, with support for **pagination**, **automatic unique IDs**, and **term-based search**. A CLI is included for quick terminal interactions.
+`Mnemic` is a simple JavaScript library for managing file-based databases using JSON Lines (`.jsonl`). It allows you to add, retrieve, update, and delete rows, with support for **pagination**, **automatic unique IDs**, and **term-based search**. A CLI is included for quick terminal interactions.
 
 ---
 
